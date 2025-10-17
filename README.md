@@ -1,1 +1,1 @@
-# stock-analyzer
+# stock-analyzer by Martin yu
