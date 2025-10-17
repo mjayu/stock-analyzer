@@ -4,9 +4,7 @@ import json
 import random
 from datetime import datetime
 
-import yfinance as yf
 import requests
-from bs4 import BeautifulSoup
 import pandas as pd
 from dotenv import load_dotenv
 
@@ -159,70 +157,41 @@ def fetch_history_alpha(ticker, period='1y', interval='1d', force_refresh=False)
 
 
 def fetch_metrics(ticker, force_refresh=False):
-    """Unified fetch_metrics: try Alpha Vantage first (if key present), fall back to yfinance."""
-    if ALPHA_KEY:
-        try:
-            return fetch_metrics_alpha(ticker, force_refresh=force_refresh)
-        except Exception:
-            pass
-
-    t = yf.Ticker(ticker)
-    info = t.info if hasattr(t, 'info') else {}
-    # select a few helpful metrics
-    metrics = {
-        'symbol': info.get('symbol', ticker),
-        'shortName': info.get('shortName'),
-        'longName': info.get('longName'),
-        'marketCap': info.get('marketCap'),
-        'previousClose': info.get('previousClose'),
-        'open': info.get('open'),
-        'dayHigh': info.get('dayHigh'),
-        'dayLow': info.get('dayLow'),
-        'fiftyTwoWeekHigh': info.get('fiftyTwoWeekHigh'),
-        'fiftyTwoWeekLow': info.get('fiftyTwoWeekLow'),
-        'trailingPE': info.get('trailingPE'),
-        'forwardPE': info.get('forwardPE'),
-        'dividendYield': info.get('dividendYield'),
-    }
-    return metrics
+    """Fetch metrics using Alpha Vantage only."""
+    return fetch_metrics_alpha(ticker, force_refresh=force_refresh)
 
 
 def fetch_history(ticker, period='1y', interval='1d', force_refresh=False):
-    # prefer alpha if available
-    if ALPHA_KEY:
-        try:
-            return fetch_history_alpha(ticker, period=period, interval=interval, force_refresh=force_refresh)
-        except Exception:
-            pass
-
-    t = yf.Ticker(ticker)
-    hist = t.history(period=period, interval=interval)
-    hist = hist.reset_index()
-    hist['Date'] = hist['Date'].dt.tz_localize(None)
-    return hist
+    return fetch_history_alpha(ticker, period=period, interval=interval, force_refresh=force_refresh)
 
 
-def fetch_news_yahoo(ticker, limit=20, force_refresh=False):
-    """Scrape Yahoo Finance news for a ticker. Returns list of articles. Caches results."""
-    key = f"yahoo:news:{ticker}"
+def fetch_news(ticker, limit=20, force_refresh=False):
+    """Fetch news using Alpha Vantage NEWS_SENTIMENT endpoint and cache results."""
+    if not ALPHA_KEY:
+        raise RuntimeError('ALPHA_VANTAGE_KEY not set')
+
+    key = f"alpha:news:{ticker}"
     if not force_refresh:
         cached = _cache_get(key, TTL_NEWS)
         if cached:
             return cached
 
-    url = f"https://finance.yahoo.com/quote/{ticker}/news"
-    r = _requests_with_retry(url)
-    if not r or r.status_code != 200:
+    url = 'https://www.alphavantage.co/query'
+    params = {'function': 'NEWS_SENTIMENT', 'tickers': ticker, 'apikey': ALPHA_KEY}
+    r = _requests_with_retry(url, params=params)
+    if not r:
         return []
-    soup = BeautifulSoup(r.text, 'lxml')
-    items = soup.select('h3 a')
+    j = r.json()
+    # AlphaVantage returns a 'feed' list
+    feed = j.get('feed') or j.get('items') or j.get('articles') or []
     results = []
-    for it in items[:limit]:
-        title = it.get_text(strip=True)
-        href = it.get('href')
-        if href and href.startswith('/'):
-            href = 'https://finance.yahoo.com' + href
-        results.append({'title': title, 'url': href, 'source': 'Yahoo Finance', 'published_at': datetime.utcnow().isoformat()})
+    for item in feed[:limit]:
+        title = item.get('title') or item.get('headline')
+        urlv = item.get('url') or item.get('link')
+        source = item.get('source') or item.get('provider_name') or 'AlphaVantage'
+        published = item.get('time_published') or item.get('published_at') or item.get('time')
+        # Normalize
+        results.append({'title': title, 'url': urlv, 'source': source, 'published_at': published})
 
     _cache_set(key, results)
     return results

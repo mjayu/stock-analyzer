@@ -15,65 +15,81 @@ This repository contains a minimal Streamlit app that:
 - `src/db.py` — tiny SQLite helper to store news and a small cache table.
 - `requirements.txt` — Python dependency list.
 
-## Quick start (Linux / macOS)
+# Stock Analyzer
 
-1. Install system dependencies (needed for Pillow and building some packages):
+Small Streamlit dashboard to analyze stock metrics and show news.
+
+This repository now uses Alpha Vantage as the primary data provider. It fetches:
+
+- Company overview and fundamentals (OVERVIEW)
+- Historical daily adjusted prices (TIME_SERIES_DAILY_ADJUSTED)
+- News via the NEWS_SENTIMENT endpoint
+
+All network calls are cached in `data/stock_analyzer.db` to reduce API quota usage and avoid rate-limit errors.
+
+## Files of interest
+
+- `app.py` — Streamlit UI and app glue. Includes a "Refresh (bypass cache)" button in the sidebar.
+- `src/fetcher.py` — Alpha Vantage-only fetchers with retries and caching.
+- `src/db.py` — SQLite helpers for news cache and a small key/value cache table.
+- `scripts/setup_env.sh` — creates `.venv`, installs requirements, and prepares `.env`.
+- `scripts/run_app.sh` — helper to run the Streamlit app from `.venv` (background/foreground).
+
+## Requirements
+
+- You must have an Alpha Vantage API key. Sign up at: https://www.alphavantage.co
+- Add the key to `.env` (at the repo root):
+
+```bash
+ALPHA_VANTAGE_KEY=your_api_key_here
+```
+
+## Quick start
+
+1. Install system deps (if running locally and you need Pillow support):
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y libjpeg-dev zlib1g-dev libpng-dev build-essential python3-dev
 ```
 
-2. Create and activate a virtual environment, then install Python packages:
+2. Run the setup script (creates venv and installs Python deps):
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-.venv/bin/pip install --upgrade pip setuptools wheel
-.venv/bin/pip install -r requirements.txt
+./scripts/setup_env.sh --no-system-deps
 ```
 
-3. Run the Streamlit app (headless or normally):
+3. Start the app (background):
 
 ```bash
-# headless (server only)
-.venv/bin/streamlit run app.py --server.headless true --server.port 8501
-
-# or normal (opens in browser)
-.venv/bin/streamlit run app.py
+./scripts/run_app.sh
 ```
 
-You should see Streamlit print URLs like `Network URL: http://10.x.x.x:8501` and/or `Local URL: http://localhost:8501`.
+Or foreground:
 
-## Accessing the app
+```bash
+./scripts/run_app.sh --foreground
+```
 
-- If you're on the same machine, open `http://localhost:8501` in your browser.
-- In cloud/dev environments (Codespaces, Codespaces-like), use the provider's port forwarding or preview feature to open port `8501`.
+4. Open the app in your browser (default port 8501) or use your cloud provider's port-forwarding/preview feature.
 
-## Environment variables and API keys
+## Notes on rate limits and caching
 
-- The app currently scrapes Yahoo Finance for headline links. For production-grade news, use an official news API (NewsAPI, GNews, Bing News Search, etc.).
-- Add API keys to a `.env` file at the repo root and load them in `src/fetcher.py` if you wire a news provider. A sample `.env` is already created.
+- Alpha Vantage free tier has rate limits (typically 5 requests/min). The app caches responses in `data/stock_analyzer.db`:
+	- Metrics TTL: 10 minutes
+	- History TTL: 1 hour
+	- News TTL: 6 hours
+- Use the "Refresh (bypass cache)" button in the sidebar to force a cache bypass for the current ticker.
 
 ## Troubleshooting
 
-- `streamlit: command not found` — make sure you installed dependencies into the virtualenv and you run the `streamlit` binary from `.venv/bin/streamlit` or activate the venv.
-- `Failed building wheel for pillow` or JPEG header errors — install `libjpeg-dev` (see step 1). Many pillow failures are resolved by system image libs.
-- If yfinance fails or is slow, check network connectivity and consider caching results or using a data provider with an API key.
+- `ALPHA_VANTAGE_KEY not set` — add your key to `.env` and restart the app.
+- If you hit API limits, wait a minute or upgrade to a higher plan (or switch to another provider like Finnhub).
 
-## Files of interest
+## Next improvements I can implement
 
-- `app.py` — Streamlit UI
-- `src/fetcher.py` — data fetching functions (`fetch_metrics`, `fetch_history`, `fetch_news_yahoo`)
-- `src/db.py` — SQLite helpers for news cache
+- Compute `previousClose`, `open`, `dayHigh`, and `dayLow` from the latest time-series if you want those populated.
+- Add a UI indicator showing "data source: Alpha Vantage (cached: X minutes)".
+- Add a fallback provider (Finnhub) to use when Alpha Vantage hits rate limits.
 
-## Next steps / improvements
-
-- Replace the Yahoo scraper with a news API and add optional sentiment analysis.
-- Add technical indicators: SMA, EMA, RSI and plotting with candlesticks.
-- Add tests for `fetcher.py` and `db.py`, and a small GitHub Actions CI to run them.
-- Add caching or rate-limiting to reduce repeated network calls.
-
-If you want, I can implement any of the improvements above (pick one) and wire in an API key-based news provider and add tests/CI.
-
-# stock-analyzer by Martin yu
+If you want any of these, tell me which and I will implement it.

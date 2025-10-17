@@ -41,10 +41,10 @@ if ticker:
         if show_news:
             articles = db.get_news(ticker)
             if not articles:
-                articles = fetcher.fetch_news_yahoo(ticker, limit=10, force_refresh=refresh)
+                articles = fetcher.fetch_news(ticker, limit=10, force_refresh=refresh)
                 db.save_news(ticker, articles)
             st.header('News')
             for a in articles:
-                st.write(f"- [{a['title']}]({a['url']}) — {a.get('source')} ({a.get('published_at')})")
+                st.write(f"- [{a.get('title')}]({a.get('url')}) — {a.get('source')} ({a.get('published_at')})")
     except Exception as e:
         st.error(f"Error fetching data: {e}")
