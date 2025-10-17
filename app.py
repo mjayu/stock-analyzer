@@ -52,7 +52,7 @@ if ticker:
         st.subheader(f"{metrics.get('shortName') or metrics.get('symbol')} ({metrics.get('symbol')})")
         cols = st.columns(4)
         cols[0].metric('Previous Close', metrics.get('previousClose'))
-    cols[1].metric('Market Cap', _format_large_number(metrics.get('marketCap')))
+        cols[1].metric('Market Cap', _format_large_number(metrics.get('marketCap')))
         cols[2].metric('PE (TTM)', metrics.get('trailingPE'))
         cols[3].metric('Dividend Yield', metrics.get('dividendYield'))
 
@@ -61,9 +61,9 @@ if ticker:
             st.line_chart(hist.set_index('Date')['Close'])
 
         st.header('Key Metrics')
-    # Format values for display in the metrics table
-    display_metrics = {k: _format_large_number(v) if k == 'marketCap' else (v if v is not None else '-') for k, v in metrics.items()}
-    st.table(pd.DataFrame.from_dict(display_metrics, orient='index', columns=['value']))
+        # Format values for display in the metrics table
+        display_metrics = {k: _format_large_number(v) if k == 'marketCap' else (v if v is not None else '-') for k, v in metrics.items()}
+        st.table(pd.DataFrame.from_dict(display_metrics, orient='index', columns=['value']))
 
         if show_news:
             articles = db.get_news(ticker)
