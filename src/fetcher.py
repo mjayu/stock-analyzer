@@ -84,21 +84,48 @@ def fetch_metrics_alpha(ticker, force_refresh=False):
     if not data:
         return {}
 
+    # Helper to safely parse numeric strings
+    def _safe_float(v):
+        try:
+            if v is None:
+                return None
+            if isinstance(v, (int, float)):
+                return float(v)
+            s = str(v).strip()
+            if s == '' or s.lower() == 'none':
+                return None
+            return float(s)
+        except Exception:
+            return None
+
+    def _safe_int(v):
+        try:
+            if v is None:
+                return None
+            if isinstance(v, int):
+                return v
+            s = str(v).strip()
+            if s == '' or s.lower() == 'none':
+                return None
+            return int(float(s))
+        except Exception:
+            return None
+
     # Map some fields to a consistent shape used by the app
     metrics = {
         'symbol': data.get('Symbol', ticker),
         'shortName': data.get('Name'),
         'longName': data.get('Description'),
-        'marketCap': int(data.get('MarketCapitalization')) if data.get('MarketCapitalization') else None,
+        'marketCap': _safe_int(data.get('MarketCapitalization')),
         'previousClose': None,
         'open': None,
         'dayHigh': None,
         'dayLow': None,
-        'fiftyTwoWeekHigh': None,
-        'fiftyTwoWeekLow': None,
-        'trailingPE': float(data.get('PERatio')) if data.get('PERatio') else None,
-        'forwardPE': None,
-        'dividendYield': float(data.get('DividendYield')) if data.get('DividendYield') else None,
+        'fiftyTwoWeekHigh': _safe_float(data.get('52WeekHigh') or data.get('WeekHigh52') or data.get('52_Week_High')),
+        'fiftyTwoWeekLow': _safe_float(data.get('52WeekLow') or data.get('WeekLow52') or data.get('52_Week_Low')),
+        'trailingPE': _safe_float(data.get('PERatio')),
+        'forwardPE': _safe_float(data.get('ForwardPE') or data.get('ForwardPE')),
+        'dividendYield': _safe_float(data.get('DividendYield')),
     }
 
     _cache_set(key, metrics)
@@ -128,15 +155,42 @@ def fetch_history_alpha(ticker, period='1y', interval='1d', force_refresh=False)
     j = r.json()
     ts = j.get('Time Series (Daily)') or {}
     rows = []
+    # Safe numeric parsing for time series values
+    def _parse_ts_float(s):
+        try:
+            if s is None:
+                return float('nan')
+            if isinstance(s, (int, float)):
+                return float(s)
+            ss = str(s).strip()
+            if ss == '' or ss.lower() == 'none':
+                return float('nan')
+            return float(ss)
+        except Exception:
+            return float('nan')
+
+    def _parse_ts_int(s):
+        try:
+            if s is None:
+                return 0
+            if isinstance(s, int):
+                return s
+            ss = str(s).strip()
+            if ss == '' or ss.lower() == 'none':
+                return 0
+            return int(float(ss))
+        except Exception:
+            return 0
+
     for d, vals in ts.items():
         rows.append({
             'Date': d,
-            'Open': float(vals.get('1. open', 'nan')),
-            'High': float(vals.get('2. high', 'nan')),
-            'Low': float(vals.get('3. low', 'nan')),
-            'Close': float(vals.get('4. close', 'nan')),
-            'Adj Close': float(vals.get('5. adjusted close', 'nan')),
-            'Volume': int(vals.get('6. volume', 0)),
+            'Open': _parse_ts_float(vals.get('1. open')),
+            'High': _parse_ts_float(vals.get('2. high')),
+            'Low': _parse_ts_float(vals.get('3. low')),
+            'Close': _parse_ts_float(vals.get('4. close')),
+            'Adj Close': _parse_ts_float(vals.get('5. adjusted close')),
+            'Volume': _parse_ts_int(vals.get('6. volume')),
         })
 
     df = pd.DataFrame(rows)
